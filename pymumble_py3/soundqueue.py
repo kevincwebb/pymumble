@@ -21,6 +21,7 @@ class SoundQueue:
         self.start_time = None
 
         self.receive_sound = True
+        self.receive_filter = lambda soundQ, sound : True
         
         self.lock = Lock()
         
@@ -36,6 +37,9 @@ class SoundQueue:
             self.receive_sound = True
         else:
             self.receive_sound = False
+
+    def set_receive_filter(self, value):
+        self.receive_filter = value
 
     def add(self, audio, sequence, type, target):
         """Add a new audio frame to the queue, after decoding"""
@@ -57,15 +61,17 @@ class SoundQueue:
                 calculated_time = self.start_time + (sequence - self.start_sequence) * PYMUMBLE_SEQUENCE_DURATION
 
             newsound = SoundChunk(pcm, sequence, len(pcm), calculated_time, type, target)
-            self.queue.appendleft(newsound)
 
-            if len(self.queue) > 1 and self.queue[0].time < self.queue[1].time:
-                # sort the audio chunk if it came out of order
-                cpt = 0
-                while cpt < len(self.queue) - 1 and self.queue[cpt].time < self.queue[cpt+1].time:
-                    tmp = self.queue[cpt+1]
-                    self.queue[cpt+1] = self.queue[cpt]
-                    self.queue[cpt] = tmp
+            if self.receive_filter(self, newsound):
+                self.queue.appendleft(newsound)
+
+                if len(self.queue) > 1 and self.queue[0].time < self.queue[1].time:
+                    # sort the audio chunk if it came out of order
+                    cpt = 0
+                    while cpt < len(self.queue) - 1 and self.queue[cpt].time < self.queue[cpt+1].time:
+                        tmp = self.queue[cpt+1]
+                        self.queue[cpt+1] = self.queue[cpt]
+                        self.queue[cpt] = tmp
 
             self.lock.release()
             return newsound
